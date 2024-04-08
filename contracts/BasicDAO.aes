@@ -1,0 +1,170 @@
+@compiler >= 6
+
+include "String.aes"
+include "List.aes"
+include "Pair.aes"
+
+contract DAO = 
+
+    record state = {
+        name: string,
+        description: string,
+        image: string, 
+        socials: list(string),
+        votingTime: int,
+        quorum: int,
+        proposals: map(int, proposal),
+        totalProposals: int,
+        members: list(address)}
+
+    record proposal = {
+        id: int,
+        proposer: address,
+        proposalType: string,
+        description: string,
+        value: int,
+        target: address,
+        endTime: int,
+        votesFor: int,
+        votesAgainst: int,
+        isExecuted: bool,
+        hasVoted: map(address, bool)}
+
+    record info = {
+        name: string,
+        description: string,
+        contractAddress: address,
+        image: string,
+        socials: list(string),
+        quorum: int,
+        votingTime: int,
+        members: list(address),
+        proposals: int,
+        activeProposals: int}
+
+    stateful entrypoint init(_name: string, _description: string, _image: string, _socials: list(string), _creator: address, _initialMembers: list(address)): state = 
+        {
+            name = _name,
+            description = _description,
+            image = _image,
+            socials = _socials,
+            votingTime = 10800000, // 3 hours in milliseconds
+            quorum = 50, // Quorum set as a percentage
+            proposals = {},
+            totalProposals = 0,
+            members = _initialMembers ++ [_creator]}
+
+    public entrypoint getInfo(): info = 
+        {
+            name = state.name,
+            description = state.description,
+            contractAddress = Contract.address, 
+            image = state.image,
+            socials = state.socials,
+            quorum = state.quorum,
+            votingTime = state.votingTime,
+            members = state.members,
+            proposals = Map.size(state.proposals),
+            activeProposals = List.length(List.filter((x) => Pair.snd(x).endTime > Chain.timestamp, Map.to_list(state.proposals)))}
+
+    public entrypoint getProposals(): list(proposal) = 
+        List.map((x) => Pair.snd(x), Map.to_list(state.proposals))
+
+    public entrypoint getActiveProposals(): list(proposal) = 
+        List.filter((p) => p.endTime > Chain.timestamp, getProposals())
+
+    public entrypoint getProposal(id: int): proposal = 
+        switch(Map.lookup(id, state.proposals))
+            None => abort("Invalid proposal id")
+            Some(p) => p
+
+    public entrypoint isMember(account: address): bool =
+        List.member(account, state.members)
+
+    public stateful entrypoint createProposal(_proposalType: string, _description: string, _value: int, _target: address) = 
+        require(isMember(Call.caller), "You're not a member of this DAO")
+        let proposalId : int = state.totalProposals
+        let newProposal : proposal = {
+            id = proposalId,
+            proposer = Call.caller,
+            proposalType = _proposalType,
+            description = _description,
+            value = _value,
+            target= _target,
+            endTime = Chain.timestamp + state.votingTime,
+            votesFor = 0,
+            votesAgainst = 0,
+            isExecuted = false,
+            hasVoted = {}}
+        put(state{proposals[proposalId] = newProposal, totalProposals = proposalId + 1})
+        proposalId
+
+    public stateful entrypoint voteFor(proposalId: int) = 
+        require(isMember(Call.caller), "You're not a member of this DAO")
+        let proposal = Map.lookup_default(proposalId, state.proposals, abort("Invalid proposal id"))
+        require(!Map.lookup_default(Call.caller, proposal.hasVoted, false), "You've already voted!")
+        require(Chain.timestamp < proposal.endTime, "Proposal has ended!")
+        let updatedProposal = {
+            proposal with votesFor = proposal.votesFor + 1,
+                          hasVoted = Map.put(proposal.hasVoted, Call.caller, true)}
+        put(state{proposals[proposalId] = updatedProposal})
+
+    public stateful entrypoint voteAgainst(proposalId: int) = 
+        require(isMember(Call.caller), "You're not a member of this DAO")
+        let proposal = Map.lookup_default(proposalId, state.proposals, abort("Invalid proposal id"))
+        require(!Map.lookup_default(Call.caller, proposal.hasVoted, false), "You've already voted!")
+        require(Chain.timestamp < proposal.endTime, "Proposal has ended!")
+        let updatedProposal = {
+            proposal with votesAgainst = proposal.votesAgainst + 1,
+                          hasVoted = Map.put(proposal.hasVoted, Call.caller, true)}
+        put(state{proposals[proposalId] = updatedProposal})
+
+    public stateful entrypoint executeProposal(proposalId: int) = 
+        require(isMember(Call.caller), "You're not a member of this DAO")
+        let proposal = Map.lookup_default(proposalId, state.proposals, abort("Invalid proposal id"))
+        require(Chain.timestamp > proposal.endTime, "Proposal has not ended!")
+        require(!_proposal.isExecuted, "Proposal already executed")
+        let votesTotal = proposal.votesFor + proposal.votesAgainst
+        let membersCount = List.length(state.members)
+        let quorumReached = (votesTotal * 100 / membersCount) >= state.quorum
+        require(quorumReached, "Quorum not reached")
+
+        // Execute proposal based on its type
+        if(proposal.proposalType == "addMember" && !proposal.isExecuted)
+            _addMember(proposal.target)
+        elif(proposal.proposalType == "removeMember" && !proposal.isExecuted)
+            _removeMember(proposal.target)
+        elif(proposal.proposalType == "setQuorum" && !proposal.isExecuted)
+            _setQuorum(proposal.value)
+        elif(proposal.proposalType == "setVotingTime" && !proposal.isExecuted)
+            _setVotingTime(proposal.value)
+        
+        let executedProposal = {proposal with isExecuted = true}
+        put(state{proposals[proposalId] = executedProposal})
+
+
+
+    // Add a new member to the DAO
+    stateful function _addMember(newMember: address) = 
+        if(!List.member(newMember, state.members))
+            put(state{members = newMember :: state.members})
+
+    // Remove a member from the DAO
+    stateful function _removeMember(memberToRemove: address) = 
+        let filteredMembers = List.filter((m) => m != memberToRemove, state.members)
+        put(state{members = filteredMembers})
+
+    // Set a new quorum percentage for the DAO
+    stateful function _setQuorum(newQuorum: int) = 
+        if(newQuorum > 0 && newQuorum <= 100)
+            put(state{quorum = newQuorum})
+        else
+            abort("Invalid quorum value. Must be between 1 and 100.")
+
+    // Set a new voting time for proposals in the DAO
+    stateful function _setVotingTime(newVotingTime: int) = 
+        if(newVotingTime > 0)
+            put(state{votingTime = newVotingTime})
+        else
+            abort("Invalid voting time. Must be greater than 0.")
+

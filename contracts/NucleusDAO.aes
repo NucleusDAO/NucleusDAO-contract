@@ -1,0 +1,33 @@
+@compiler >= 6
+
+include "String.aes"
+include "List.aes"
+include "Pair.aes"
+
+include "DAO.aes"
+
+contract NucleusDao = 
+    record state = {
+        daos: map(string, DAO),
+        totalDaos: int}
+
+    stateful entrypoint init() = 
+        {daos = {},
+            totalDaos = 0}
+
+    public payable stateful entrypoint createDAO(_name: string, _description: string, image: string, socials: list(string), _initialMembers: list(address), _startingBalance: int):  DAO = 
+        require(Call.value >= _startingBalance, "Attach starting balance!")
+        let _newDAO: DAO = Chain.create(value = _startingBalance, _name, _description, image, socials, Call.caller, _initialMembers): DAO
+        require(Map.member(_name, state.daos) == false, "DAO name already taken")
+        let _newDaoId = state.totalDaos
+        put(state{daos[_name] = _newDAO})
+        put(state{totalDaos @ t = t + 1})
+        _newDAO
+    
+
+    public entrypoint getDAOs() =
+        let _daoList = Map.to_list(state.daos)
+        List.map((x) => Pair.snd(x).getInfo(), _daoList)
+
+    public entrypoint getDAO(_daoId: string) = 
+        state.daos[_daoId].getInfo()
