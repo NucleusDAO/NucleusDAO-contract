@@ -1,20 +1,43 @@
+/**
+ * @title NucleusDao
+ * @notice This contract serves as the nucleus for managing multiple decentralized autonomous organizations (DAOs).
+ * @dev This contract is responsible for creating and managing multiple DAOs.
+ */
 @compiler >= 6
 
 include "String.aes"
 include "List.aes"
 include "Pair.aes"
 
-include "DAO.aes"
+include "BasicDAO.aes"
 
 contract NucleusDao = 
-    record state = {
-        daos: map(string, DAO),
-        totalDaos: int}
 
+    /**
+     * @dev Structure to store the state of the NucleusDao contract.
+     */
+    record state = {
+        daos: map(string, DAO),  // Mapping of DAO names to their respective DAO contracts
+        totalDaos: int}           // Total number of DAOs created
+
+    /**
+     * @notice Initializes the NucleusDao contract.
+     * @return Initial state of the contract.
+     */
     stateful entrypoint init() = 
         {daos = {},
             totalDaos = 0}
 
+    /**
+     * @notice Creates a new DAO.
+     * @param _name The name of the new DAO.
+     * @param _description A brief description of the new DAO.
+     * @param image URL of an image associated with the new DAO.
+     * @param socials List of social media links associated with the new DAO.
+     * @param _initialMembers List of addresses representing initial members of the new DAO.
+     * @param _startingBalance The starting balance for the new DAO.
+     * @return The newly created DAO.
+     */
     public payable stateful entrypoint createDAO(_name: string, _description: string, image: string, socials: list(string), _initialMembers: list(address), _startingBalance: int):  DAO = 
         require(Call.value >= _startingBalance, "Attach starting balance!")
         let _newDAO: DAO = Chain.create(value = _startingBalance, _name, _description, image, socials, Call.caller, _initialMembers): DAO
@@ -25,9 +48,18 @@ contract NucleusDao =
         _newDAO
     
 
+    /**
+     * @notice Retrieves information about all DAOs.
+     * @return List of information about all DAOs.
+     */
     public entrypoint getDAOs() =
         let _daoList = Map.to_list(state.daos)
         List.map((x) => Pair.snd(x).getInfo(), _daoList)
 
+    /**
+     * @notice Retrieves information about a specific DAO.
+     * @param _daoId The name of the DAO to retrieve information for.
+     * @return Information about the specified DAO.
+     */
     public entrypoint getDAO(_daoId: string) = 
         state.daos[_daoId].getInfo()
