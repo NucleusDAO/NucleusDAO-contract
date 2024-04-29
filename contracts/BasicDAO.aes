@@ -8,6 +8,7 @@ include "String.aes"
 include "List.aes"
 include "Pair.aes"
 
+
 contract DAO = 
 
     /**
@@ -15,6 +16,7 @@ contract DAO =
      */
     record state = {
         name: string,               // The name of the DAO
+        id: string,
         description: string,        // A brief description of the DAO
         image: string,              // URL of the DAO's image
         socials: list(string),      // List of social media links associated with the DAO
@@ -22,7 +24,9 @@ contract DAO =
         quorum: int,                // Percentage of members required for a proposal to be considered valid
         proposals: map(int, proposal),  // Mapping of proposal IDs to their respective details
         totalProposals: int,        // Total number of proposals created
-        members: list(address)}     // List of addresses representing members of the DAO
+        totalVotes: int,            // Total number of votes cast
+        members: list(address),     // List of addresses representing members of the DAO
+        activities: map(address, userActivities)}  // Mapping of member addresses to their respective voting activities
 
     /**
      * @dev Structure to represent a proposal.
@@ -34,26 +38,54 @@ contract DAO =
         description: string,        // Description of the proposal
         value: int,                 // Value associated with the proposal (if applicable)
         target: address,            // Target address affected by the proposal (if applicable)
+        startTime: int,              // Timestamp indicating the start of the voting period for the proposal
         endTime: int,               // Timestamp indicating the end of the voting period for the proposal
         votesFor: int,              // Number of votes in favor of the proposal
         votesAgainst: int,          // Number of votes against the proposal
         isExecuted: bool,           // Flag indicating whether the proposal has been executed
         hasVoted: map(address, bool)}  // Mapping of member addresses to their vote status for the proposal
 
+    record formattedProposal = {
+        id: int,                    // Unique identifier for the proposal
+        daoName: string,
+        daoId: string,
+        proposer: address,          // Address of the member who proposed the action
+        proposalType: string,       // Type of proposal (e.g., addMember, removeMember, setQuorum, setVotingTime)
+        description: string,        // Description of the proposal
+        value: int,                 // Value associated with the proposal (if applicable)
+        target: address,            // Target address affected by the proposal (if applicable)
+        startTime: int,              // Timestamp indicating the start of the voting period for the proposal
+        endTime: int,               // Timestamp indicating the end of the voting period for the proposal
+        votesFor: int,              // Number of votes in favor of the proposal
+        votesAgainst: int,          // Number of votes against the proposal
+        isExecuted: bool,           // Flag indicating whether the proposal has been executed
+        voters: list(address)}  // Mapping of member addresses to their vote status for the proposal
+
+
+    record userActivities = {
+        address: address,
+        voteCasted: int,
+        proposalsCreated: int,
+        proposalsExecuted: int}
+
     /**
      * @dev Structure to represent information about the DAO.
      */
     record info = {
         name: string,               // The name of the DAO
+        id: string,                 // Unique identifier for the DAO
         description: string,        // A brief description of the DAO
-        contractAddress: address,   // Address of the DAO contract
+        contractAddress: DAO,       // Address of the DAO contract
+        account: address,           // Address of the DAO contract
         image: string,              // URL of the DAO's image
-        socials: list(string),      // List of social media links associated with the DAO
+        socials: list(string),  // List of social media links associated with the DAO
         quorum: int,                // Percentage of members required for a proposal to be considered valid
         votingTime: int,            // Duration of the voting period for proposals (in milliseconds)
         members: list(address),     // List of addresses representing members of the DAO
-        proposals: int,             // Total number of proposals created
+        totalProposals: int,        // Total number of proposals created
+        totalVotes: int,            // Total number of votes cast
         activeProposals: int}       // Number of active proposals (i.e., proposals with ongoing voting)
+
 
     /**
      * @notice Initializes the DAO with the provided parameters.
@@ -65,17 +97,21 @@ contract DAO =
      * @param _initialMembers List of addresses representing initial members of the DAO.
      * @return The initial state of the DAO.
      */
-    stateful entrypoint init(_name: string, _description: string, _image: string, _socials: list(string), _creator: address, _initialMembers: list(address)): state = 
+    stateful entrypoint init(_name: string, _id: string, _description: string, _image: string, _socials: list(string), _creator: address, _initialMembers: list(address), _votingTime: int, _quorum: int): state = 
+        require(_quorum > 0 && _quorum =< 100, "Quorum must be between 0 and 100")
         {
             name = _name,
+            id = _id,
             description = _description,
             image = _image,
             socials = _socials,
-            votingTime = 10800000, // 3 hours in milliseconds
-            quorum = 50, // Quorum set as a percentage
+            votingTime = _votingTime,
+            quorum = _quorum,
             proposals = {},
             totalProposals = 0,
-            members = _initialMembers ++ [_creator]}
+            totalVotes = 0,
+            members = _creator :: _initialMembers,
+            activities = {}}
 
     /**
      * @notice Retrieves information about the DAO.
@@ -84,28 +120,47 @@ contract DAO =
     public entrypoint getInfo(): info = 
         {
             name = state.name,
+            id = state.id,
             description = state.description,
-            contractAddress = Contract.address, 
+            contractAddress = Address.to_contract(Contract.address): DAO,
+            account = Contract.address,
             image = state.image,
             socials = state.socials,
             quorum = state.quorum,
             votingTime = state.votingTime,
             members = state.members,
-            proposals = Map.size(state.proposals),
+            totalProposals = state.totalProposals,
+            totalVotes = state.totalVotes,
             activeProposals = List.length(List.filter((x) => Pair.snd(x).endTime > Chain.timestamp, Map.to_list(state.proposals)))}
 
     /**
      * @notice Retrieves all proposals.
      * @return List of all proposals.
      */
-    public entrypoint getProposals(): list(proposal) = 
-        List.map((x) => Pair.snd(x), Map.to_list(state.proposals))
+    public entrypoint getProposals(): list(formattedProposal) = 
+        List.map((x) => formatProposal(Pair.snd(x)), Map.to_list(state.proposals))
 
+    function formatProposal(_proposal: proposal): formattedProposal = 
+        {
+            description = _proposal.description,
+            id = _proposal.id,
+            value = _proposal.value,
+            target = _proposal.target,
+            startTime = _proposal.startTime,
+            endTime = _proposal.endTime,
+            proposer = _proposal.proposer,
+            proposalType = _proposal.proposalType,
+            votesFor = _proposal.votesFor,
+            votesAgainst = _proposal.votesAgainst,
+            isExecuted = _proposal.isExecuted,
+            voters = List.map((x) => Pair.fst(x), Map.to_list(_proposal.hasVoted)),
+            daoName = state.name,
+            daoId = state.id}
     /**
      * @notice Retrieves active proposals.
      * @return List of active proposals.
      */
-    public entrypoint getActiveProposals(): list(proposal) = 
+    public entrypoint getActiveProposals(): list(formattedProposal) = 
         List.filter((p) => p.endTime > Chain.timestamp, getProposals())
 
     /**
@@ -113,10 +168,10 @@ contract DAO =
      * @param id The ID of the proposal.
      * @return Details of the specified proposal.
      */
-    public entrypoint getProposal(id: int): proposal = 
+    public entrypoint getProposal(id: int): formattedProposal = 
         switch(Map.lookup(id, state.proposals))
             None => abort("Invalid proposal id")
-            Some(p) => p
+            Some(p) => formatProposal(p)
 
     /**
      * @notice Checks if an address is a member of the DAO.
@@ -124,7 +179,13 @@ contract DAO =
      * @return True if the address is a member, otherwise false.
      */
     public entrypoint isMember(account: address): bool =
-        List.member(account, state.members)
+        List.contains(account, state.members)
+
+    public entrypoint getMemberActivities(account: address): userActivities =
+        Map.lookup_default(account, state.activities, { address = account, voteCasted = 0, proposalsCreated = 0, proposalsExecuted = 0})
+
+    public entrypoint getAllMembersActivities(): list(userActivities) =
+        List.map((x) => Pair.snd(x), Map.to_list(state.activities))
 
     /**
      * @notice Creates a new proposal.
@@ -144,13 +205,16 @@ contract DAO =
             description = _description,
             value = _value,
             target= _target,
+            startTime = Chain.timestamp,
             endTime = Chain.timestamp + state.votingTime,
             votesFor = 0,
             votesAgainst = 0,
             isExecuted = false,
             hasVoted = {}}
         put(state{proposals[proposalId] = newProposal, totalProposals = proposalId + 1})
-        proposalId
+        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {address = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
+        put(state{activities[Call.caller] = activities{proposalsCreated = activities.proposalsCreated + 1}})
+        newProposal
 
     /**
      * @notice Casts a vote in favor of a proposal.
@@ -158,13 +222,17 @@ contract DAO =
      */
     public stateful entrypoint voteFor(proposalId: int) = 
         require(isMember(Call.caller), "You're not a member of this DAO")
-        let proposal = Map.lookup_default(proposalId, state.proposals, abort("Invalid proposal id"))
+        require(proposalId < state.totalProposals, "Invalid proposal id")
+        let proposal = state.proposals[proposalId]
         require(!Map.lookup_default(Call.caller, proposal.hasVoted, false), "You've already voted!")
         require(Chain.timestamp < proposal.endTime, "Proposal has ended!")
-        let updatedProposal = {
-            proposal with votesFor = proposal.votesFor + 1,
-                          hasVoted = Map.put(proposal.hasVoted, Call.caller, true)}
-        put(state{proposals[proposalId] = updatedProposal})
+
+        let updatedProposal = proposal{votesFor @ v = v + 1}
+        put(state{proposals[proposalId] = updatedProposal, totalVotes = state.totalVotes + 1})
+        put(state{proposals[proposalId].hasVoted[Call.caller] = true})
+        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {address = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
+        put(state{activities[Call.caller] = activities{proposalsCreated = activities.voteCasted + 1}})
+        updatedProposal
 
     /**
      * @notice Casts a vote against a proposal.
@@ -172,13 +240,16 @@ contract DAO =
      */
     public stateful entrypoint voteAgainst(proposalId: int) = 
         require(isMember(Call.caller), "You're not a member of this DAO")
-        let proposal = Map.lookup_default(proposalId, state.proposals, abort("Invalid proposal id"))
+        require(proposalId < state.totalProposals, "Invalid proposal id")
+        let proposal = state.proposals[proposalId]
         require(!Map.lookup_default(Call.caller, proposal.hasVoted, false), "You've already voted!")
         require(Chain.timestamp < proposal.endTime, "Proposal has ended!")
-        let updatedProposal = {
-            proposal with votesAgainst = proposal.votesAgainst + 1,
-                          hasVoted = Map.put(proposal.hasVoted, Call.caller, true)}
-        put(state{proposals[proposalId] = updatedProposal})
+        let updatedProposal = proposal{votesFor @ v = v - 1}
+        put(state{proposals[proposalId] = updatedProposal, totalVotes = state.totalVotes + 1})
+        put(state{proposals[proposalId].hasVoted[Call.caller] = true})
+        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {address = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
+        put(state{activities[Call.caller] = activities{proposalsCreated = activities.voteCasted + 1}})
+        updatedProposal
 
     /**
      * @notice Executes a proposal if conditions are met.
@@ -188,7 +259,7 @@ contract DAO =
         require(isMember(Call.caller), "You're not a member of this DAO")
         let proposal = Map.lookup_default(proposalId, state.proposals, abort("Invalid proposal id"))
         require(Chain.timestamp > proposal.endTime, "Proposal has not ended!")
-        require(!_proposal.isExecuted, "Proposal already executed")
+        require(!proposal.isExecuted, "Proposal already executed")
         let votesTotal = proposal.votesFor + proposal.votesAgainst
         let membersCount = List.length(state.members)
         let quorumReached = (votesTotal * 100 / membersCount) >= state.quorum
@@ -204,15 +275,18 @@ contract DAO =
         elif(proposal.proposalType == "setVotingTime" && !proposal.isExecuted)
             _setVotingTime(proposal.value)
         
-        let executedProposal = {proposal with isExecuted = true}
+        let executedProposal = proposal{isExecuted = true}
         put(state{proposals[proposalId] = executedProposal})
+        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {address = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
+        put(state{activities[Call.caller] = activities{proposalsCreated = activities.proposalsExecuted + 1}})
+        executedProposal
 
     /**
      * @dev Internal function to add a new member to the DAO.
      * @param newMember The address of the new member.
      */
     stateful function _addMember(newMember: address) = 
-        if(!List.member(newMember, state.members))
+        if(!List.contains(newMember, state.members))
             put(state{members = newMember :: state.members})
 
     /**
@@ -228,7 +302,7 @@ contract DAO =
      * @param newQuorum The new quorum percentage.
      */
     stateful function _setQuorum(newQuorum: int) = 
-        if(newQuorum > 0 && newQuorum <= 100)
+        if(newQuorum > 0 && newQuorum =< 100)
             put(state{quorum = newQuorum})
         else
             abort("Invalid quorum value. Must be between 1 and 100.")
@@ -242,3 +316,5 @@ contract DAO =
             put(state{votingTime = newVotingTime})
         else
             abort("Invalid voting time. Must be greater than 0.")
+
+

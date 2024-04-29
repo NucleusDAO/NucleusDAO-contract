@@ -11,7 +11,7 @@ include "Pair.aes"
 
 include "BasicDAO.aes"
 
-contract NucleusDao = 
+main contract NucleusDao = 
 
     /**
      * @dev Structure to store the state of the NucleusDao contract.
@@ -38,12 +38,16 @@ contract NucleusDao =
      * @param _startingBalance The starting balance for the new DAO.
      * @return The newly created DAO.
      */
-    public payable stateful entrypoint createDAO(_name: string, _description: string, image: string, socials: list(string), _initialMembers: list(address), _startingBalance: int):  DAO = 
+    public payable stateful entrypoint createDAO(_name: string, _id: string, _description: string, image: string, socials: list(string), _initialMembers: list(address), _startingBalance: int, _votingTime: int, _quorum: int):  DAO = 
         require(Call.value >= _startingBalance, "Attach starting balance!")
-        let _newDAO: DAO = Chain.create(value = _startingBalance, _name, _description, image, socials, Call.caller, _initialMembers): DAO
-        require(Map.member(_name, state.daos) == false, "DAO name already taken")
-        let _newDaoId = state.totalDaos
-        put(state{daos[_name] = _newDAO})
+        // id must not contain string
+        require(String.length(_id) > 0, "DAO id must not be empty")
+        switch(String.contains(_id, " "))
+            Some(spaces) => abort("DAO id must not contain spaces")
+            None => ()
+        let _newDAO: DAO = Chain.create(value = _startingBalance, _name, _id, _description, image, socials, Call.caller, _initialMembers, _votingTime, _quorum): DAO
+        require(Map.member(_id, state.daos) == false, "DAO id already taken")
+        put(state{daos[_id] = _newDAO})
         put(state{totalDaos @ t = t + 1})
         _newDAO
     

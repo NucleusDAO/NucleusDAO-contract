@@ -3,23 +3,19 @@ const {
   CompilerHttp,
   MemoryAccount,
   Node,
-} = require("@aeternity/aepp-sdk");
-const { utils } = require("@aeternity/aeproject");
+} = require('@aeternity/aepp-sdk');
+const { utils } = require('@aeternity/aeproject');
+const path = require('path');
+require('dotenv').config();
 
-const shutdown = (varName) => {
-  console.error(`Missing ENV variable: ${varName}`);
-  process.exit(1);
-};
-
-const NODE_URL = "https://testnet.aeternity.io";
-const COMPILER_URL = "https://v7.compiler.aeternity.io";
-
-const collectionTemplateEditionData = require("../nfts/collection_templates.json");
+const NODE_URL = 'https://testnet.aeternity.io';
+const COMPILER_URL = 'https://v7.compiler.aeternity.io';
 
 (async function () {
-  secretKey = process.env.SECRET_KEY;
+  const secretKey = process.env.SECRET_KEY;
+  console.log(secretKey);
   if (!secretKey) {
-    throw error("Missing SECRET_KEY environment variable");
+    throw Error('Missing SECRET_KEY environment variable');
   }
   const senderAccount = new MemoryAccount(secretKey);
   const senderAddress = senderAccount.address;
@@ -29,11 +25,11 @@ const collectionTemplateEditionData = require("../nfts/collection_templates.json
   const node = new Node(NODE_URL);
   const aeSdk = new AeSdk({
     onCompiler: new CompilerHttp(COMPILER_URL),
-    nodes: [{ name: "testnet", instance: node }],
+    nodes: [{ name: 'testnet', instance: node }],
   });
   aeSdk.addAccount(senderAccount, { select: true });
 
-  const CONTRACT = "./contracts/CollectionTemplateEditionNFTs.aes";
+  const CONTRACT = path.join(__dirname, '..', 'contracts', 'NucleusDAO.aes');
   const sourceCode = utils.getContractContent(CONTRACT);
   const fileSystem = utils.getFilesystem(CONTRACT);
 

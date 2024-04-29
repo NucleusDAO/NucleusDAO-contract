@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "description": "This is the default package.json generated for your project",
   "scripts": {
-    "test": "mocha ./test/**/*.js --timeout 0 --exit"
+    "test": "mocha ./test/**/*.js --timeout 0 --exit",
+    "compile": "cd scripts  && node compile.js",
+    "deploy": "cd scripts &&  node deploy.js"
   },
   "dependencies": {
-    "@aeternity/aepp-sdk": "^13.2.2"
+    "@aeternity/aepp-sdk": "^13.2.2",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@aeternity/aeproject": "^4.9.0",
