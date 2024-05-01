@@ -87,6 +87,11 @@ contract DAO =
         activeProposals: int}       // Number of active proposals (i.e., proposals with ongoing voting)
 
 
+    record socialUrl = {
+        name: string,
+        url: string}
+
+
     /**
      * @notice Initializes the DAO with the provided parameters.
      * @param _name The name of the DAO.

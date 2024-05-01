@@ -38,7 +38,7 @@ main contract NucleusDao =
      * @param _startingBalance The starting balance for the new DAO.
      * @return The newly created DAO.
      */
-    public payable stateful entrypoint createDAO(_name: string, _id: string, _description: string, image: string, socials: list(string), _initialMembers: list(address), _startingBalance: int, _votingTime: int, _quorum: int):  DAO = 
+    public payable stateful entrypoint createDAO(_name: string, _id: string, _description: string, image: string, socials: list(DAO.socialUrl), _initialMembers: list(address), _startingBalance: int, _votingTime: int, _quorum: int):  DAO = 
         require(Call.value >= _startingBalance, "Attach starting balance!")
         // id must not contain string
         require(String.length(_id) > 0, "DAO id must not be empty")
