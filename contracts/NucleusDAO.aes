@@ -15,6 +15,8 @@ main contract NucleusDao =
 
     /**
      * @dev Structure to store the state of the NucleusDao contract.
+     * @field daos Mapping of DAO names to their respective DAO contracts.
+     * @field totalDaos Total number of DAOs created.
      */
     record state = {
         daos: map(string, DAO),  // Mapping of DAO names to their respective DAO contracts
@@ -31,16 +33,19 @@ main contract NucleusDao =
     /**
      * @notice Creates a new DAO.
      * @param _name The name of the new DAO.
+     * @param _id A unique identifier for the new DAO.
      * @param _description A brief description of the new DAO.
      * @param image URL of an image associated with the new DAO.
      * @param socials List of social media links associated with the new DAO.
      * @param _initialMembers List of addresses representing initial members of the new DAO.
      * @param _startingBalance The starting balance for the new DAO.
+     * @param _votingTime The voting period duration for the new DAO.
+     * @param _quorum The quorum percentage required for proposal validation in the new DAO.
      * @return The newly created DAO.
      */
-    public payable stateful entrypoint createDAO(_name: string, _id: string, _description: string, image: string, socials: list(DAO.socialUrl), _initialMembers: list(address), _startingBalance: int, _votingTime: int, _quorum: int):  DAO = 
+    public payable stateful entrypoint createDAO(_name: string, _id: string, _description: string, image: string, socials: list(DAO.socialUrl), _initialMembers: list(address), _startingBalance: int, _votingTime: int, _quorum: int): DAO = 
         require(Call.value >= _startingBalance, "Attach starting balance!")
-        // id must not contain string
+        // Ensure DAO ID is unique and formatted correctly.
         require(String.length(_id) > 0, "DAO id must not be empty")
         switch(String.contains(_id, " "))
             Some(spaces) => abort("DAO id must not contain spaces")
@@ -50,10 +55,9 @@ main contract NucleusDao =
         put(state{daos[_id] = _newDAO})
         put(state{totalDaos @ t = t + 1})
         _newDAO
-    
 
     /**
-     * @notice Retrieves information about all DAOs.
+     * @notice Retrieves information about all DAOs managed by NucleusDao.
      * @return List of information about all DAOs.
      */
     public entrypoint getDAOs() =
@@ -61,9 +65,40 @@ main contract NucleusDao =
         List.map((x) => Pair.snd(x).getInfo(), _daoList)
 
     /**
+     * @notice Retrieves a consolidated list of proposals from all managed DAOs, sorted by start time.
+     * @return Sorted list of all proposals.
+     */
+    public entrypoint getAllProposals() = 
+        let _daoList = Map.to_list(state.daos)
+        let _proposals = List.flat_map((x) => Pair.snd(x).getProposals(), _daoList)
+        List.sort((proposal1, proposal2) => proposal1.startTime < proposal2.startTime, _proposals)
+
+    /**
      * @notice Retrieves information about a specific DAO.
-     * @param _daoId The name of the DAO to retrieve information for.
+     * @param _daoId The unique identifier of the DAO to retrieve information for.
      * @return Information about the specified DAO.
      */
     public entrypoint getDAO(_daoId: string) = 
         state.daos[_daoId].getInfo()
+
+    /**
+    * @notice Retrieves user activities across all DAOs.
+    * @param _user The address of the user whose activities are to be retrieved.
+    * @return A record of the total activities (votes casted, proposals created, and proposals executed) by the user across all DAOs.
+    */
+    public entrypoint getUserActivitiesAcrossDAOs(_user: address) =
+        let daoList = Map.to_list(state.daos)
+        let userActivitiesList = List.map((x) => Pair.snd(x).getMemberActivities(_user), daoList)
+        let totalActivities = List.foldl((acc, act) => {
+            voteCasted = acc.voteCasted + act.voteCasted,
+            account = _user,
+            proposalsCreated = acc.proposalsCreated + act.proposalsCreated,
+            proposalsExecuted = acc.proposalsExecuted + act.proposalsExecuted}, {voteCasted = 0, proposalsCreated = 0, proposalsExecuted = 0, account = _user}, userActivitiesList)
+        // let _userActivities: userActivities = {
+        //     voteCasted = totalActivities,voteCasted,
+        //     address = _user,
+        //     proposalsCreated =  totalActivities.proposalsCreated,
+        //     proposalsExecuted = totalActivities.proposalsExecuted}
+        // _userActivities
+        totalActivities
+

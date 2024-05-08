@@ -51,7 +51,7 @@ payable contract DAO =
 
 
     record userActivities = {
-        address: address,
+        account: address,
         voteCasted: int,
         proposalsCreated: int,
         proposalsExecuted: int}
@@ -72,22 +72,39 @@ payable contract DAO =
         members: list(address),     // List of addresses representing members of the DAO
         totalProposals: int,        // Total number of proposals created
         totalVotes: int,            // Total number of votes cast
+        balance: int,
         activeProposals: int}       // Number of active proposals (i.e., proposals with ongoing voting)
 
-
+    /**
+    * @dev Structure to represent a vote in a proposal.
+    * @field account The wallet address of the voter.
+    * @field support Boolean indicating whether the vote is in favor (true) or against (false).
+    */
     record socialUrl = {
         name: string,
         url: string}
-
+    /**
+    * @dev Structure to represent a vote in a proposal.
+    * @field account The wallet address of the voter.
+    * @field support Boolean indicating whether the vote is in favor (true) or against (false).
+    */
     record vote = {
         account: address,
         support: bool}
 
+    /**
+    * @dev Structure used for passing information as a payload in proposals.
+    * @field name Name relevant to the proposal, such as updated name of the DAO.
+    * @field socials List of updated social media URLs, if the proposal involves updating social links.
+    * @field image New image URL if the proposal involves updating the DAO's image.
+    */
     // Info payload
     record infoPayload = {
         name: string,
         socials: list(socialUrl),
         image: string}
+
+    let validProposalTypes = ["updateName", "updateSocials", "updateImage", "addMember", "removeMember", "quorum"," voteTime", "transfer"]
 
 
     /**
@@ -134,7 +151,8 @@ payable contract DAO =
             members = state.members,
             totalProposals = state.totalProposals,
             totalVotes = state.totalVotes,
-            activeProposals = List.length(List.filter((x) => Pair.snd(x).endTime > Chain.timestamp, Map.to_list(state.proposals)))}
+            activeProposals = List.length(List.filter((x) => Pair.snd(x).endTime > Chain.timestamp, Map.to_list(state.proposals))),
+            balance = Chain.balance(Contract.address)}
 
     /**
      * @notice Retrieves all proposals.
@@ -165,12 +183,21 @@ payable contract DAO =
      * @param account The address to check.
      * @return True if the address is a member, otherwise false.
      */
+     
     public entrypoint isMember(account: address): bool =
         List.contains(account, state.members)
-
+    /**
+    * @notice Retrieves the activity record for a specific member.
+    * @param account The address of the member whose activities are to be retrieved.
+    * @return The activity record containing details of votes casted, proposals created, and proposals executed by the member.
+    */
     public entrypoint getMemberActivities(account: address): userActivities =
-        Map.lookup_default(account, state.activities, { address = account, voteCasted = 0, proposalsCreated = 0, proposalsExecuted = 0})
-
+        Map.lookup_default(account, state.activities, { account = account, voteCasted = 0, proposalsCreated = 0, proposalsExecuted = 0})
+    /**
+    * @notice Retrieves the activity record for a specific member.
+    * @param account The address of the member whose activities are to be retrieved.
+    * @return The activity record containing details of votes casted, proposals created, and proposals executed by the member.
+    */
     public entrypoint getAllMembersActivities(): list(userActivities) =
         List.map((x) => Pair.snd(x), Map.to_list(state.activities))
 
@@ -184,6 +211,7 @@ payable contract DAO =
      */
     public stateful entrypoint createProposal(_proposalType: string, _description: string, _value: int, _target: address, _info: infoPayload) = 
         require(isMember(Call.caller), "You're not a member of this DAO")
+        require(List.contains(_proposalType, validProposalTypes), "Invalid proposal type")
         let proposalId : int = state.totalProposals
         // Check for valid proposal type
         let newProposal : proposal = {
@@ -204,7 +232,7 @@ payable contract DAO =
             info = _info,
             hasVoted = {}}
         put(state{proposals[proposalId] = newProposal, totalProposals = proposalId + 1})
-        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {address = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
+        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {account = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
         put(state{activities[Call.caller] = activities{proposalsCreated = activities.proposalsCreated + 1}})
         newProposal
 
@@ -225,7 +253,7 @@ payable contract DAO =
         let updatedProposal = proposal{votesFor @ v = v + 1, votes @ vts = userVote :: vts}
         put(state{proposals[proposalId] = updatedProposal, totalVotes = state.totalVotes + 1})
         put(state{proposals[proposalId].hasVoted[Call.caller] = true})
-        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {address = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
+        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {account = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
         put(state{activities[Call.caller] = activities{proposalsCreated = activities.voteCasted + 1}})
         updatedProposal
 
@@ -245,7 +273,7 @@ payable contract DAO =
         let updatedProposal = proposal{votesAgainst @ v = v + 1, votes @ vts = userVote :: vts}
         put(state{proposals[proposalId] = updatedProposal, totalVotes = state.totalVotes + 1})
         put(state{proposals[proposalId].hasVoted[Call.caller] = true})
-        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {address = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
+        let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {account = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
         put(state{activities[Call.caller] = activities{proposalsCreated = activities.voteCasted + 1}})
         updatedProposal
 
@@ -279,11 +307,18 @@ payable contract DAO =
             Chain.spend(_proposal.target, _proposal.value)
         put(state{proposals[_proposalId] = _proposal})
 
+    /**
+    * @notice Allows sending funds to the DAO's contract address. These funds can be used for DAO operations or redistributed based on proposals.
+    */
     public stateful payable entrypoint deposit() = 
         ()
 
     // Internal functions
-
+    /**
+    * @dev Internal function to check if a proposal has reached the required quorum.
+    * @param _proposalId The ID of the proposal to check.
+    * @return True if the proposal meets the quorum requirement, otherwise false.
+    */
     stateful function _checkQuorum(_proposalId: int): bool = 
         let _proposal = state.proposals[_proposalId]
         let _totalVotes = _proposal.votesFor + _proposal.votesAgainst
@@ -292,13 +327,24 @@ payable contract DAO =
             true
         else
             false
-
+    /**
+    * @dev Internal function to update the DAO's name.
+    * @param _name The new name to set for the DAO.
+    */
     stateful function _updateName(_name: string) = 
         put(state{name = _name})
 
+    /**
+    * @dev Internal function to update the social media links of the DAO.
+    * @param _socials A list of new social URLs to set for the DAO.
+    */
     stateful function _updateSocials(_socials: list(socialUrl)) = 
         put(state{socials = _socials})
 
+    /**
+     * @dev Internal function to update the image URL of the DAO.
+     * @param _image The new image URL to set for the DAO.
+     */
     stateful function _updateImage(_image: string) = 
         put(state{image = _image})
     /**
