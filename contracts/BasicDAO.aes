@@ -104,7 +104,7 @@ payable contract DAO =
         socials: list(socialUrl),
         image: string}
 
-    let validProposalTypes = ["updateName", "updateSocials", "updateImage", "addMember", "removeMember", "quorum"," voteTime", "transfer"]
+    let validProposalTypes = ["updateName", "updateSocials", "updateImage", "addMember", "removeMember", "updateQuorum", "updateVoteTime", "transfer", "join"]
 
 
     /**
@@ -159,7 +159,8 @@ payable contract DAO =
      * @return List of all proposals.
      */
     public entrypoint getProposals(): list(proposal) = 
-        List.map((x) => Pair.snd(x), Map.to_list(state.proposals))
+        let _proposals = List.map((x) => Pair.snd(x), Map.to_list(state.proposals))
+        List.sort((proposal1, proposal2) => proposal1.startTime < proposal2.startTime, _proposals)
 
     /**
      * @notice Retrieves active proposals.
@@ -199,7 +200,7 @@ payable contract DAO =
     * @return The activity record containing details of votes casted, proposals created, and proposals executed by the member.
     */
     public entrypoint getAllMembersActivities(): list(userActivities) =
-        List.map((x) => Pair.snd(x), Map.to_list(state.activities))
+        List.map((member) => getMemberActivities(member), state.members)
 
     /**
      * @notice Creates a new proposal.
@@ -210,7 +211,7 @@ payable contract DAO =
      * @return The ID of the newly created proposal.
      */
     public stateful entrypoint createProposal(_proposalType: string, _description: string, _value: int, _target: address, _info: infoPayload) = 
-        require(isMember(Call.caller), "You're not a member of this DAO")
+        require(isMember(Call.caller) || _proposalType == "join", "You're not a member of this DAO")
         require(List.contains(_proposalType, validProposalTypes), "Invalid proposal type")
         let proposalId : int = state.totalProposals
         // Check for valid proposal type
@@ -220,7 +221,7 @@ payable contract DAO =
             proposalType = _proposalType,
             description = _description,
             value = _value,
-            target= _target,
+            target = if( _proposalType == "join") Call.caller else _target,
             startTime = Chain.timestamp,
             endTime = Chain.timestamp + state.votingTime,
             votesFor = 0,
@@ -254,7 +255,7 @@ payable contract DAO =
         put(state{proposals[proposalId] = updatedProposal, totalVotes = state.totalVotes + 1})
         put(state{proposals[proposalId].hasVoted[Call.caller] = true})
         let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {account = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
-        put(state{activities[Call.caller] = activities{proposalsCreated = activities.voteCasted + 1}})
+        put(state{activities[Call.caller] = activities{voteCasted = activities.voteCasted + 1}})
         updatedProposal
 
     /**
@@ -274,7 +275,7 @@ payable contract DAO =
         put(state{proposals[proposalId] = updatedProposal, totalVotes = state.totalVotes + 1})
         put(state{proposals[proposalId].hasVoted[Call.caller] = true})
         let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {account = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
-        put(state{activities[Call.caller] = activities{proposalsCreated = activities.voteCasted + 1}})
+        put(state{activities[Call.caller] = activities{voteCasted = activities.voteCasted + 1}})
         updatedProposal
 
     /**

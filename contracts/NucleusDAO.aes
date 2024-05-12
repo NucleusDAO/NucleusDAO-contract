@@ -65,12 +65,31 @@ main contract NucleusDao =
         List.map((x) => Pair.snd(x).getInfo(), _daoList)
 
     /**
+     * @notice Retrieves information about all DAOs which _user is a member
+     * @param _user Address of the user whose DAOs are to be retrieved
+     * @return List of information about all DAOs.
+     */
+    public entrypoint getUserDAOs(_user: address) =
+        List.filter((dao) => List.contains(_user, dao.members), getDAOs())
+
+    /**
      * @notice Retrieves a consolidated list of proposals from all managed DAOs, sorted by start time.
      * @return Sorted list of all proposals.
      */
     public entrypoint getAllProposals() = 
         let _daoList = Map.to_list(state.daos)
         let _proposals = List.flat_map((x) => Pair.snd(x).getProposals(), _daoList)
+        List.sort((proposal1, proposal2) => proposal1.startTime < proposal2.startTime, _proposals)
+
+    /**
+     * @notice Retrieves a consolidated list of proposals from all DAOs _user is a member of
+     * @param _user Address of the user whose proposals are to be retrieve
+     * @return Sorted list of all proposals.
+     */
+    public entrypoint getUserProposals(_user: address) = 
+        let _daoList = Map.to_list(state.daos)
+        let _userDaoList = List.filter((x) => Pair.snd(x).isMember(_user), _daoList)
+        let _proposals = List.flat_map((x) => Pair.snd(x).getProposals(), _userDaoList)
         List.sort((proposal1, proposal2) => proposal1.startTime < proposal2.startTime, _proposals)
 
     /**

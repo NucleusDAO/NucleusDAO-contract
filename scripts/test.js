@@ -54,7 +54,10 @@ const daoFileSystem = utils.getFilesystem(DAO_CONTRACT);
     'My personal DAO',
     'https://tse3.mm.bing.net/th?id=OIP.NtaJNxfrjFBLd5fNGM0-sgHaI5',
     [],
-    [],
+    [
+      'ak_F7ZzN6kMcst2rFo7s3QEPjD5Frgy36NPeL32Wf9Cx4SnC8oPn',
+      'ak_kUi548jwCWDEA6TR5jp4mgbZLFE9NXFZ64gYw1Z288Dvts8UG',
+    ],
     100,
     60 * 60 * 24 * 3,
     50,
@@ -71,6 +74,9 @@ const daoFileSystem = utils.getFilesystem(DAO_CONTRACT);
     aci: daoACI,
     address: daos[0].contractAddress,
   });
+  console.log(
+    (await daoInstance.getMemberActivities(senderAddress)).decodedResult
+  );
   console.log('Creating proposal...');
   const proposal = (
     await daoInstance.createProposal(
@@ -83,9 +89,26 @@ const daoFileSystem = utils.getFilesystem(DAO_CONTRACT);
   ).decodedResult;
   console.log('Proposal created!', proposal);
   console.log((await daoInstance.getProposal(proposal.id)).decodedResult);
-  const proposals = (await daoInstance.getProposals()).decodedResult;
-  console.log({ proposals });
   console.log('Voting for proposal...');
   await daoInstance.voteAgainst(proposal.id);
   console.log((await daoInstance.getProposal(proposal.id)).decodedResult);
+  console.log('Creating another proposal...');
+  const proposal2 = (
+    await daoInstance.createProposal(
+      'transfer',
+      'Pay Hexdee',
+      10,
+      senderAddress,
+      { name: '', socials: [], image: '' }
+    )
+  ).decodedResult;
+  console.log('Proposal created!', proposal2);
+  console.log((await daoInstance.getProposal(proposal.id)).decodedResult);
+  const proposals = (await daoInstance.getProposals()).decodedResult;
+  console.log({ proposals });
+  console.log('Voting for proposal...');
+  await daoInstance.voteFor(proposal2.id);
+  console.log(
+    (await daoInstance.getMemberActivities(senderAddress)).decodedResult
+  );
 })();
