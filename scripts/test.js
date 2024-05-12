@@ -92,23 +92,6 @@ const daoFileSystem = utils.getFilesystem(DAO_CONTRACT);
   console.log('Voting for proposal...');
   await daoInstance.voteAgainst(proposal.id);
   console.log((await daoInstance.getProposal(proposal.id)).decodedResult);
-  console.log('Creating another proposal...');
-  const proposal2 = (
-    await daoInstance.createProposal(
-      'transfer',
-      'Pay Hexdee',
-      10,
-      senderAddress,
-      { name: '', socials: [], image: '' }
-    )
-  ).decodedResult;
-  console.log('Proposal created!', proposal2);
-  console.log((await daoInstance.getProposal(proposal.id)).decodedResult);
   const proposals = (await daoInstance.getProposals()).decodedResult;
   console.log({ proposals });
-  console.log('Voting for proposal...');
-  await daoInstance.voteFor(proposal2.id);
-  console.log(
-    (await daoInstance.getMemberActivities(senderAddress)).decodedResult
-  );
 })();
