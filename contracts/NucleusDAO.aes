@@ -62,7 +62,7 @@ main contract NucleusDao =
      */
     public entrypoint getDAOs() =
         let _daoList = Map.to_list(state.daos)
-        List.map((x) => Pair.snd(x).getInfo(), _daoList)
+        List.sort((dao1, dao2) => dao1.createdAt < dao2.createdAt, List.map((x) => Pair.snd(x).getInfo(), _daoList))
 
     /**
      * @notice Retrieves information about all DAOs which _user is a member
@@ -113,11 +113,5 @@ main contract NucleusDao =
             account = _user,
             proposalsCreated = acc.proposalsCreated + act.proposalsCreated,
             proposalsExecuted = acc.proposalsExecuted + act.proposalsExecuted}, {voteCasted = 0, proposalsCreated = 0, proposalsExecuted = 0, account = _user}, userActivitiesList)
-        // let _userActivities: userActivities = {
-        //     voteCasted = totalActivities,voteCasted,
-        //     address = _user,
-        //     proposalsCreated =  totalActivities.proposalsCreated,
-        //     proposalsExecuted = totalActivities.proposalsExecuted}
-        // _userActivities
         totalActivities
 

@@ -26,6 +26,7 @@ payable contract DAO =
         totalProposals: int,        // Total number of proposals created
         totalVotes: int,            // Total number of votes cast
         members: list(address),     // List of addresses representing members of the DAO
+        createdAt: int,             // Timestamp of when the DAO was created
         activities: map(address, userActivities)}  // Mapping of member addresses to their respective voting activities
 
     /**
@@ -72,7 +73,8 @@ payable contract DAO =
         members: list(address),     // List of addresses representing members of the DAO
         totalProposals: int,        // Total number of proposals created
         totalVotes: int,            // Total number of votes cast
-        balance: int,
+        balance: int,               // Balance of the DAO contract
+        createdAt: int,             // Timestamp of when the DAO was created
         activeProposals: int}       // Number of active proposals (i.e., proposals with ongoing voting)
 
     /**
@@ -131,6 +133,7 @@ payable contract DAO =
             totalProposals = 0,
             totalVotes = 0,
             members = _creator :: _initialMembers,
+            createdAt = Chain.timestamp,
             activities = {}}
 
     /**
@@ -151,6 +154,7 @@ payable contract DAO =
             members = state.members,
             totalProposals = state.totalProposals,
             totalVotes = state.totalVotes,
+            createdAt = Chain.timestamp,
             activeProposals = List.length(List.filter((x) => Pair.snd(x).endTime > Chain.timestamp, Map.to_list(state.proposals))),
             balance = Chain.balance(Contract.address)}
 
@@ -287,16 +291,20 @@ payable contract DAO =
         require(isMember(Call.caller), "You're not a member of this DAO")
         require(_proposalId < state.totalProposals, "Invalid proposal id")
         let _proposal = state.proposals[_proposalId]
+        require(!_proposal.isExecuted, "Proposal already executed")
         require(Chain.timestamp > _proposal.endTime, "Proposal has not ended!")
+        require(Chain.timestamp < _proposal.endTime + state.votingTime, "Proposal can no longer be executed!")
         require(_checkQuorum(_proposalId), "Quorum was not reached")
         _proposal{isExecuted = true}
         if(_proposal.proposalType == "updateName")
             _updateName(_proposal.info.name)
-        if(_proposal.proposalType == "updateSocials")
+        elif(_proposal.proposalType == "updateSocials")
             _updateSocials(_proposal.info.socials)
-        if(_proposal.proposalType == "updateImage")
+        elif(_proposal.proposalType == "updateImage")
             _updateImage(_proposal.info.image)
-        if(_proposal.proposalType == "addMember")
+        elif(_proposal.proposalType == "addMember")
+            _addMember(_proposal.target)
+        if(_proposal.proposalType == "join")
             _addMember(_proposal.target)
         elif(_proposal.proposalType == "removeMember")
             _removeMember(_proposal.target)
@@ -324,7 +332,7 @@ payable contract DAO =
         let _proposal = state.proposals[_proposalId]
         let _totalVotes = _proposal.votesFor + _proposal.votesAgainst
         let _percentageVoted = _totalVotes * 100 / List.length(state.members)
-        if (_percentageVoted > state.quorum)
+        if (_percentageVoted >= state.quorum)
             true
         else
             false
