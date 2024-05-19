@@ -106,7 +106,7 @@ payable contract DAO =
         socials: list(socialUrl),
         image: string}
 
-    let validProposalTypes = ["updateName", "updateSocials", "updateImage", "addMember", "removeMember", "updateQuorum", "updateVoteTime", "transfer", "join"]
+    let validProposalTypes = ["updateName", "updateSocials", "updateImage", "addMember", "removeMember", "updateQuorum", "updateVoteTime", "transfer", "join", "custom"]
 
 
     /**
