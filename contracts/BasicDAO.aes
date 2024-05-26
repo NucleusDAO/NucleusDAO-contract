@@ -154,7 +154,7 @@ payable contract DAO =
             members = state.members,
             totalProposals = state.totalProposals,
             totalVotes = state.totalVotes,
-            createdAt = Chain.timestamp,
+            createdAt = state.createdAt,
             activeProposals = List.length(List.filter((x) => Pair.snd(x).endTime > Chain.timestamp, Map.to_list(state.proposals))),
             balance = Chain.balance(Contract.address)}
 
@@ -293,7 +293,7 @@ payable contract DAO =
         let _proposal = state.proposals[_proposalId]
         require(!_proposal.isExecuted, "Proposal already executed")
         require(Chain.timestamp > _proposal.endTime, "Proposal has not ended!")
-        require(Chain.timestamp < _proposal.endTime + state.votingTime, "Proposal can no longer be executed!")
+        require(Chain.timestamp < _proposal.endTime + 60480000, "Proposal can no longer be executed!")
         require(_checkQuorum(_proposalId), "Quorum was not reached")
         _proposal{isExecuted = true}
         if(_proposal.proposalType == "updateName")
@@ -315,6 +315,8 @@ payable contract DAO =
         elif(_proposal.proposalType == "transfer")
             Chain.spend(_proposal.target, _proposal.value)
         put(state{proposals[_proposalId] = _proposal})
+        _proposal
+        
 
     /**
     * @notice Allows sending funds to the DAO's contract address. These funds can be used for DAO operations or redistributed based on proposals.
