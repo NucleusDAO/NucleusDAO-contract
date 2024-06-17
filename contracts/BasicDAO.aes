@@ -167,7 +167,7 @@ payable contract DAO =
      */
     public entrypoint getProposals(): list(proposal) = 
         let _proposals = List.map((x) => Pair.snd(x), Map.to_list(state.proposals))
-        List.sort((proposal1, proposal2) => proposal1.startTime < proposal2.startTime, _proposals)
+        List.sort((proposal1, proposal2) => proposal1.startTime > proposal2.startTime, _proposals)
 
     /**
      * @notice Retrieves active proposals.
