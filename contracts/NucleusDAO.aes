@@ -62,7 +62,7 @@ main contract NucleusDao =
      */
     public entrypoint getDAOs() =
         let _daoList = Map.to_list(state.daos)
-        List.sort((dao1, dao2) => dao1.createdAt < dao2.createdAt, List.map((x) => Pair.snd(x).getInfo(), _daoList))
+        List.sort((dao1, dao2) => dao1.createdAt > dao2.createdAt, List.map((x) => Pair.snd(x).getInfo(), _daoList))
 
     /**
      * @notice Retrieves information about all DAOs which _user is a member
@@ -79,7 +79,7 @@ main contract NucleusDao =
     public entrypoint getAllProposals() = 
         let _daoList = Map.to_list(state.daos)
         let _proposals = List.flat_map((x) => Pair.snd(x).getProposals(), _daoList)
-        List.sort((proposal1, proposal2) => proposal1.startTime < proposal2.startTime, _proposals)
+        List.sort((proposal1, proposal2) => proposal1.startTime > proposal2.startTime, _proposals)
 
     /**
      * @notice Retrieves a consolidated list of proposals from all DAOs _user is a member of
@@ -90,7 +90,7 @@ main contract NucleusDao =
         let _daoList = Map.to_list(state.daos)
         let _userDaoList = List.filter((x) => Pair.snd(x).isMember(_user), _daoList)
         let _proposals = List.flat_map((x) => Pair.snd(x).getProposals(), _userDaoList)
-        List.sort((proposal1, proposal2) => proposal1.startTime < proposal2.startTime, _proposals)
+        List.sort((proposal1, proposal2) => proposal1.startTime > proposal2.startTime, _proposals)
 
     /**
      * @notice Retrieves information about a specific DAO.

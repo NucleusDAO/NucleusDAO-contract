@@ -19,7 +19,7 @@ payable contract DAO =
         id: string,
         description: string,        // A brief description of the DAO
         image: string,              // URL of the DAO's image
-        socials: list(socialUrl),      // List of social media links associated with the DAO
+        socials: list(socialUrl),   // List of social media links associated with the DAO
         votingTime: int,            // Duration of the voting period for proposals (in milliseconds)
         quorum: int,                // Percentage of members required for a proposal to be considered valid
         proposals: map(int, proposal),  // Mapping of proposal IDs to their respective details
@@ -48,6 +48,9 @@ payable contract DAO =
         votes: list(vote),
         daoName: string,
         daoId: string,
+        daoImage: string,
+        currentMembers: int,
+        quorum: int,
         hasVoted: map(address, bool)}  // Mapping of member addresses to their vote status for the proposal
 
 
@@ -234,7 +237,10 @@ payable contract DAO =
             isExecuted = false,
             daoName = state.name,
             daoId = state.id,
+            daoImage = state.image,
             info = _info,
+            currentMembers = List.length(state.members),
+            quorum = state.quorum,
             hasVoted = {}}
         put(state{proposals[proposalId] = newProposal, totalProposals = proposalId + 1})
         let activities : userActivities = Map.lookup_default(Call.caller, state.activities, {account = Call.caller, proposalsCreated = 0, proposalsExecuted = 0, voteCasted = 0})
@@ -293,9 +299,9 @@ payable contract DAO =
         let _proposal = state.proposals[_proposalId]
         require(!_proposal.isExecuted, "Proposal already executed")
         require(Chain.timestamp > _proposal.endTime, "Proposal has not ended!")
-        require(Chain.timestamp < _proposal.endTime + 60480000, "Proposal can no longer be executed!")
-        require(_checkQuorum(_proposalId), "Quorum was not reached")
-        _proposal{isExecuted = true}
+        require(_proposal.votesFor > _proposal.votesAgainst, "Proposal failed!")
+        require(_checkQuorum(_proposal), "Quorum was not reached")
+        let _updatedProposal = _proposal{isExecuted = true}
         if(_proposal.proposalType == "updateName")
             _updateName(_proposal.info.name)
         elif(_proposal.proposalType == "updateSocials")
@@ -305,17 +311,17 @@ payable contract DAO =
         elif(_proposal.proposalType == "addMember")
             _addMember(_proposal.target)
         if(_proposal.proposalType == "join")
-            _addMember(_proposal.target)
+            _addMember(_proposal.proposer)
         elif(_proposal.proposalType == "removeMember")
             _removeMember(_proposal.target)
-        elif(_proposal.proposalType == "quorum")
+        elif(_proposal.proposalType == "updateQuorum")
             _setQuorum(_proposal.value)
-        elif(_proposal.proposalType == "voteTime")
+        elif(_proposal.proposalType == "updateVoteTime")
             _setVotingTime(_proposal.value)
         elif(_proposal.proposalType == "transfer")
             Chain.spend(_proposal.target, _proposal.value)
-        put(state{proposals[_proposalId] = _proposal})
-        _proposal
+        put(state{proposals[_proposalId] = _updatedProposal})
+        _updatedProposal
         
 
     /**
@@ -330,10 +336,9 @@ payable contract DAO =
     * @param _proposalId The ID of the proposal to check.
     * @return True if the proposal meets the quorum requirement, otherwise false.
     */
-    stateful function _checkQuorum(_proposalId: int): bool = 
-        let _proposal = state.proposals[_proposalId]
+    stateful function _checkQuorum(_proposal: proposal): bool = 
         let _totalVotes = _proposal.votesFor + _proposal.votesAgainst
-        let _percentageVoted = _totalVotes * 100 / List.length(state.members)
+        let _percentageVoted = _totalVotes * 100 / _proposal.currentMembers
         if (_percentageVoted >= state.quorum)
             true
         else
@@ -393,5 +398,3 @@ payable contract DAO =
             put(state{votingTime = newVotingTime})
         else
             abort("Invalid voting time. Must be greater than 0.")
-
-
